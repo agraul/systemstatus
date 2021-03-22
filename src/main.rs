@@ -1,6 +1,6 @@
 use chrono::prelude::Local;
 use serde::{Deserialize, Serialize};
-use std::{fs, thread, time};
+use std::{env, fs, thread, time};
 
 #[derive(Serialize, Deserialize)]
 struct Header {
@@ -13,52 +13,67 @@ struct Status {
     separator: bool,
 }
 
+struct StatusList {
+    elements: Vec<Status>,
+}
+
+// TODO: make dynamic/configurable
+fn build_status_list() -> StatusList {
+    StatusList {
+        elements: vec![
+            battery_status(),
+            input_volume(),
+            output_volume(),
+            date_time(),
+            current_ip(),
+        ],
+    }
+}
+
 fn main() {
-    let header = serde_json::to_string(&Header { version: 1 }).unwrap();
-    let status = Status {
-        full_text: "Hello, Sway!".to_string(),
-        separator: true,
-    };
-    let status2 = Status {
-        full_text: "Hallo, Ana!".to_string(),
-        separator: true,
-    };
-    let mut statusline = format!(
-        "[{},{}]",
-        &serde_json::to_string(&status).unwrap(),
-        &serde_json::to_string(&status2).unwrap()
-    );
+    let mut repeat = false;
+    for arg in env::args() {
+        if arg == "--loop" {
+            repeat = true;
+        }
+    }
 
-    println!("{}", &header);
-    // start endless array
-    println!("[");
+    if repeat {
+        // systemstatus --loop
+        i3bar_loop();
+    } else {
+        // let status_list = build_status_list();
 
-    // first an empty status
-    println!("[],");
-
-    let duration = time::Duration::from_millis(1000);
-    // then my "fancy" status
-    loop {
-        print_statusline(&statusline);
-        thread::sleep(duration);
-        statusline = format!(
-            "[{},{},{},{},{},{}]",
-            &serde_json::to_string(&Status {
-                full_text: "IDLE".to_string(),
-                separator: true
-            })
-            .unwrap(),
-            &serde_json::to_string(&input_volume()).unwrap(),
-            &serde_json::to_string(&output_volume()).unwrap(),
-            &serde_json::to_string(&current_ip()).unwrap(),
-            &serde_json::to_string(&battery_status()).unwrap(),
-            &serde_json::to_string(&date_time()).unwrap(),
-        );
+        println!("foo");
     }
 }
 
 fn print_statusline(statusline: &str) {
     println!("{},", &statusline);
+}
+
+fn format_statusline(line: StatusList) -> String {
+    let mut formatted: String = "[".to_string();
+    for element in line.elements {
+        formatted.push_str(&serde_json::to_string(&element).unwrap_or("UNKNOWN".to_string()));
+        formatted.push(',');
+    }
+    formatted.push(']');
+    return formatted;
+}
+
+fn i3bar_loop() {
+    let mut statusline: String;
+    let header = serde_json::to_string(&Header { version: 1 }).unwrap();
+    println!("{}", &header);
+    // start endless array per i3bar-protocol
+    println!("[");
+    let duration = time::Duration::from_millis(1000);
+    loop {
+        statusline = format_statusline(build_status_list());
+        print_statusline(&statusline);
+        thread::sleep(duration);
+    }
 }
 
 fn battery_status() -> Status {
@@ -72,18 +87,19 @@ fn battery_status() -> Status {
                     separator: true,
                 },
                 Err(_) => Status {
-                    full_text: "".to_string(),
+                    full_text: "UNKNOWN".to_string(),
                     separator: true,
                 },
             }
         }
         Err(_) => Status {
-            full_text: "".to_string(),
+            full_text: "UNKNOWN".to_string(),
             separator: true,
         },
     }
 }
 
+// TODO
 fn output_volume() -> Status {
     Status {
         full_text: "VOL OUT".to_string(),
@@ -91,6 +107,7 @@ fn output_volume() -> Status {
     }
 }
 
+// TODO
 fn input_volume() -> Status {
     Status {
         full_text: "VOL IN".to_string(),
@@ -98,6 +115,7 @@ fn input_volume() -> Status {
     }
 }
 
+// TODO
 fn current_ip() -> Status {
     Status {
         full_text: "IP".to_string(),
