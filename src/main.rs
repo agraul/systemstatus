@@ -1,6 +1,11 @@
-use chrono::prelude::Local;
-use serde::{Deserialize, Serialize};
-use std::{env, fs, thread, time};
+use std::fmt;
+use chrono::prelude; // for current time
+use serde::{Deserialize, Serialize}; // json serialization
+use std::env; // CLI args
+use std::fs; // reading files
+use std::io; // for io::Error
+use std::thread; // for sleeping
+use std::time; // for sleep duration
 
 #[derive(Serialize, Deserialize)]
 struct Header {
@@ -9,32 +14,42 @@ struct Header {
 
 #[derive(Serialize, Deserialize)]
 struct Status {
+    name: String,
     full_text: String,
     separator: bool,
+}
+
+impl fmt::Display for Status {
+    fn fmt(self: &Status, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}\t\t{}", self.name, self.full_text)
+    }
 }
 
 struct StatusList {
     elements: Vec<Status>,
 }
 
-// TODO: make dynamic/configurable
-fn build_status_list() -> StatusList {
-    StatusList {
-        elements: vec![
-            battery_status(),
-            input_volume(),
-            output_volume(),
-            date_time(),
-            current_ip(),
-        ],
+impl StatusList {
+    // TODO: make dynamic/configurable
+    fn new() -> StatusList {
+        StatusList {
+            elements: vec![
+                battery_status(),
+                input_volume(),
+                output_volume(),
+                date_time(),
+                current_ip(),
+            ],
+        }
     }
 }
 
-fn main() {
+fn main() -> Result<(), io::Error> {
     let mut repeat = false;
     for arg in env::args() {
         if arg == "--loop" {
             repeat = true;
+            break
         }
     }
 
@@ -42,19 +57,21 @@ fn main() {
         // systemstatus --loop
         i3bar_loop();
     } else {
-        // let status_list = build_status_list();
-
-        println!("foo");
+        let status_list = StatusList::new();
+        for item in &status_list.elements {
+            println!("{}", &item);
+        }
     }
+    Ok(())
 }
 
 fn print_statusline(statusline: &str) {
     println!("{},", &statusline);
 }
 
-fn format_statusline(line: StatusList) -> String {
-    let mut formatted: String = "[".to_string();
-    for element in line.elements {
+fn format_statusline(line: &StatusList) -> String {
+    let mut formatted = String::from("[");
+    for element in &line.elements {
         formatted.push_str(&serde_json::to_string(&element).unwrap_or("UNKNOWN".to_string()));
         formatted.push(',');
     }
@@ -63,15 +80,13 @@ fn format_statusline(line: StatusList) -> String {
 }
 
 fn i3bar_loop() {
-    let mut statusline: String;
     let header = serde_json::to_string(&Header { version: 1 }).unwrap();
     println!("{}", &header);
     // start endless array per i3bar-protocol
     println!("[");
     let duration = time::Duration::from_millis(1000);
     loop {
-        statusline = format_statusline(build_status_list());
-        print_statusline(&statusline);
+        print_statusline(&format_statusline(&StatusList::new()));
         thread::sleep(duration);
     }
 }
@@ -83,16 +98,19 @@ fn battery_status() -> Status {
             let b_capacity = fs::read_to_string("/sys/class/power_supply/BAT0/capacity");
             match b_capacity {
                 Ok(capacity) => Status {
+                    name: String::from("Battery"),
                     full_text: format!("{} @ {}%", status.trim_end(), capacity.trim_end()),
                     separator: true,
                 },
                 Err(_) => Status {
+                    name: String::from("Battery"),
                     full_text: "UNKNOWN".to_string(),
                     separator: true,
                 },
             }
         }
         Err(_) => Status {
+            name: String::from("Battery"),
             full_text: "UNKNOWN".to_string(),
             separator: true,
         },
@@ -102,6 +120,7 @@ fn battery_status() -> Status {
 // TODO
 fn output_volume() -> Status {
     Status {
+        name: String::from("Audio Out"),
         full_text: "VOL OUT".to_string(),
         separator: true,
     }
@@ -110,6 +129,7 @@ fn output_volume() -> Status {
 // TODO
 fn input_volume() -> Status {
     Status {
+        name: String::from("Audio In"),
         full_text: "VOL IN".to_string(),
         separator: true,
     }
@@ -118,6 +138,7 @@ fn input_volume() -> Status {
 // TODO
 fn current_ip() -> Status {
     Status {
+        name: String::from("IP Address"),
         full_text: "IP".to_string(),
         separator: true,
     }
@@ -125,7 +146,8 @@ fn current_ip() -> Status {
 
 fn date_time() -> Status {
     Status {
-        full_text: Local::now().format("%H:%M %a, %d.%m.%Y").to_string(),
+        name: String::from("Date/Time"),
+        full_text: prelude::Local::now().format("%H:%M %a, %d.%m.%Y").to_string(),
         separator: true,
     }
 }
