@@ -1,16 +1,20 @@
-use std::fmt;
-use chrono::prelude; // for current time
-use serde::{Deserialize, Serialize}; // json serialization
+// Enable later, too much noise this early
+// #![warn(missing_debug_implementations, rust_2018_idioms, missing_docs)]
+
 use std::env; // CLI args
+use std::fmt; // fmt::Display trait
 use std::fs; // reading files
 use std::io; // for io::Error
 use std::net;
 use std::thread; // for sleeping
 use std::time; // for sleep duration
 
+use chrono::prelude; // for current time
 use pnet::datalink; // network interfaces
+use serde::{Deserialize, Serialize}; // json serialization
+
 #[derive(Serialize, Deserialize)]
-struct Header {
+struct JSONHeader {
     version: u8,
 }
 
@@ -83,7 +87,7 @@ fn format_statusline(line: &StatusList) -> String {
 }
 
 fn i3bar_loop() {
-    let header = serde_json::to_string(&Header { version: 1 }).unwrap();
+    let header = serde_json::to_string(&JSONHeader { version: 1 }).unwrap();
     println!("{}", &header);
     // start endless array per i3bar-protocol
     println!("[");
@@ -168,7 +172,9 @@ fn current_ipv4(iface: &str) -> Status {
 fn date_time() -> Status {
     Status {
         name: String::from("Date/Time"),
-        full_text: prelude::Local::now().format("%H:%M %a, %d.%m.%Y").to_string(),
+        full_text: prelude::Local::now()
+            .format("%H:%M %a, %d.%m.%Y")
+            .to_string(),
         separator: true,
     }
 }
