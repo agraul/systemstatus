@@ -4,9 +4,11 @@ use serde::{Deserialize, Serialize}; // json serialization
 use std::env; // CLI args
 use std::fs; // reading files
 use std::io; // for io::Error
+use std::net;
 use std::thread; // for sleeping
 use std::time; // for sleep duration
 
+use pnet::datalink; // network interfaces
 #[derive(Serialize, Deserialize)]
 struct Header {
     version: u8,
@@ -31,14 +33,15 @@ struct StatusList {
 
 impl StatusList {
     // TODO: make dynamic/configurable
-    fn new() -> StatusList {
-        StatusList {
+    fn new() -> Self {
+        Self {
             elements: vec![
                 battery_status(),
                 input_volume(),
                 output_volume(),
                 date_time(),
-                current_ip(),
+                current_ipv4("wlp82s0"),
+                current_ipv4("default"),
             ],
         }
     }
@@ -135,11 +138,29 @@ fn input_volume() -> Status {
     }
 }
 
-// TODO
-fn current_ip() -> Status {
+fn current_ipv4(iface: &str) -> Status {
+    let all_interfaces = datalink::interfaces();
+    let interface: Option<&datalink::NetworkInterface> = all_interfaces.iter().find(|i| i.name == iface);
+
+    let addr = match interface {
+        Some(i) => match i.ips.iter().find(|ip| ip.is_ipv4()) {
+            Some(v4) => v4.ip(),
+            None => net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
+        },
+        // no interface with the name found, look for the first interface that
+        // is up and not loopback and repeat matching
+        None => match datalink::interfaces().iter().find(|i| i.is_up() && !i.is_loopback() && !i.ips.is_empty()) {
+            Some(i) => match i.ips.iter().find(|ip| ip.is_ipv4()) {
+                Some(v4) => v4.ip(),
+                None => net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
+            },
+            None => net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
+        }
+    };
+
     Status {
-        name: String::from("IP Address"),
-        full_text: "IP".to_string(),
+        name: format!("IPv4({})", iface),
+        full_text: format!("{}", addr),
         separator: true,
     }
 }
