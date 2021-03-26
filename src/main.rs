@@ -31,9 +31,7 @@ impl fmt::Display for Status {
     }
 }
 
-struct StatusList {
-    elements: Vec<Status>,
-}
+type StatusList = Vec<Status>;
 
 impl StatusList {
     // TODO: make dynamic/configurable
